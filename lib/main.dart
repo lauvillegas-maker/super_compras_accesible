@@ -141,25 +141,60 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             ),
             const SizedBox(height: 25),
 
-            // BOTÓN GIGANTE PARA ESCANEAR CARTEL
-            ElevatedButton.icon(
-              onPressed: _procesando ? null : _escanearCartel,
-              icon: const Icon(Icons.camera_alt, size: 40),
-              label: Text(
-                _procesando ? 'Leyendo Cartel...' : 'ESCANEAR CARTEL',
-                style:
-                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+            // // Botón existente: ESCANEAR CARTEL
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // Función actual de escaneo con cámara
+                },
+                icon:
+                    const Icon(Icons.camera_alt, size: 28, color: Colors.black),
+                label: const Text(
+                  'ESCANEAR CARTEL',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(
+                      0xFFA2D2D2), // Mismo color celeste/turquesa suave
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 25),
 
+            const SizedBox(height: 12), // Espaciado entre botones
+
+// NUEVO BOTÓN: TIPEO MANUAL
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // Aquí agregaremos la ventana/diálogo para ingresar el precio
+                },
+                icon: const Icon(Icons.keyboard, size: 28, color: Colors.black),
+                label: const Text(
+                  'TIPEO MANUAL',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      const Color(0xFFA2D2D2), // Mismo color y estilo exactos
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
             // INFORMACIÓN DEL ÚLTIMO PRODUCTO DETECTADO
             Container(
               padding: const EdgeInsets.all(16),
