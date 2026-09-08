@@ -89,6 +89,53 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     }
   }
 
+  // Función para ingresar manualmente el precio
+  void _ingresarManual() {
+    TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Tipear Precio',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            decoration: const InputDecoration(
+              labelText: 'Ingrese el precio',
+              prefixText: '\$ ',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCELAR', style: TextStyle(fontSize: 18)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                double? precio =
+                    double.tryParse(controller.text.replaceAll(',', '.'));
+                if (precio != null && precio > 0) {
+                  setState(() {
+                    _ultimoProducto = 'Ingreso Manual';
+                    _ultimoPrecio = precio;
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('ACEPTAR',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _modificarTotal(bool sumar) {
     setState(() {
       if (sumar) {
@@ -141,25 +188,22 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             ),
             const SizedBox(height: 25),
 
-            // // Botón existente: ESCANEAR CARTEL
+            // Botón: ESCANEAR CARTEL
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  // Función actual de escaneo con cámara
-                },
+                onPressed: _procesando ? null : _escanearCartel,
                 icon:
                     const Icon(Icons.camera_alt, size: 28, color: Colors.black),
-                label: const Text(
-                  'ESCANEAR CARTEL',
-                  style: TextStyle(
+                label: Text(
+                  _procesando ? 'PROCESANDO...' : 'ESCANEAR CARTEL',
+                  style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.black),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(
-                      0xFFA2D2D2), // Mismo color celeste/turquesa suave
+                  backgroundColor: const Color(0xFFA2D2D2),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -168,15 +212,13 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               ),
             ),
 
-            const SizedBox(height: 12), // Espaciado entre botones
+            const SizedBox(height: 12),
 
-// NUEVO BOTÓN: TIPEO MANUAL
+            // Botón: TIPEO MANUAL
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  // Aquí agregaremos la ventana/diálogo para ingresar el precio
-                },
+                onPressed: _ingresarManual,
                 icon: const Icon(Icons.keyboard, size: 28, color: Colors.black),
                 label: const Text(
                   'TIPEO MANUAL',
@@ -186,8 +228,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                       color: Colors.black),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFFA2D2D2), // Mismo color y estilo exactos
+                  backgroundColor: const Color(0xFFA2D2D2),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -195,6 +236,9 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ),
               ),
             ),
+
+            const SizedBox(height: 20),
+
             // INFORMACIÓN DEL ÚLTIMO PRODUCTO DETECTADO
             Container(
               padding: const EdgeInsets.all(16),
