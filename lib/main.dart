@@ -15,10 +15,35 @@ class MiApp extends StatelessWidget {
     return MaterialApp(
       title: 'Super Compras',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+
+      // 1. TEMA OSCURO (Tu primera versión)
+      darkTheme: ThemeData(
         useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+        ),
       ),
+
+      // 2. TEMA CLARO ACCESIBLE
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1565C0), // Azul cobalto
+          primary: const Color(0xFF1565C0),
+          secondary: const Color(0xFF2E7D32), // Verde
+          error: const Color(0xFFC62828), // Rojo
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+      ),
+
+      // 3. CAMBIAR TEMA ACTIVO:
+      // Usa ThemeMode.dark para ver el estilo oscuro de la primera versión
+      // Usa ThemeMode.light para ver la versión clara accesible
+      themeMode: ThemeMode.dark,
+
       home: const PaginaPrincipal(),
     );
   }
