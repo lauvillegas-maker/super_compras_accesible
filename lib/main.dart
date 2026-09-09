@@ -15,35 +15,10 @@ class MiApp extends StatelessWidget {
     return MaterialApp(
       title: 'Super Compras',
       debugShowCheckedModeBanner: false,
-
-      // 1. TEMA OSCURO (Tu primera versión)
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-      ),
-
-      // 2. TEMA CLARO ACCESIBLE
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1565C0), // Azul cobalto
-          primary: const Color(0xFF1565C0),
-          secondary: const Color(0xFF2E7D32), // Verde
-          error: const Color(0xFFC62828), // Rojo
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5), // Fondo gris claro
       ),
-
-      // 3. CAMBIAR TEMA ACTIVO:
-      // Usa ThemeMode.dark para ver el estilo oscuro de la primera versión
-      // Usa ThemeMode.light para ver la versión clara accesible
-      themeMode: ThemeMode.dark,
-
       home: const PaginaPrincipal(),
     );
   }
@@ -62,7 +37,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   double _ultimoPrecio = 0.0;
   bool _procesando = false;
 
-  // Función para procesar la foto y extraer Nombre y Precio
   Future<void> _escanearCartel() async {
     var status = await Permission.camera.request();
 
@@ -81,7 +55,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
         String textoCompleto = recognizedText.text;
 
-        // Expresión regular para buscar montos de dinero ($ 1200, $1200.50, etc.)
         RegExp expPrecio = RegExp(r'\$?\s?(\d+[\.,]?\d*)');
         Iterable<RegExpMatch> matches = expPrecio.allMatches(textoCompleto);
 
@@ -91,12 +64,10 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               match.group(1)?.replaceAll('.', '').replaceAll(',', '.') ?? '0';
           double? val = double.tryParse(valStr);
           if (val != null && val > precioDetectado) {
-            // Asumimos que el número mayor suele ser el precio principal
             precioDetectado = val;
           }
         }
 
-        // Extraer la primera línea como nombre del producto
         List<String> lineas = textoCompleto.split('\n');
         String nombreDetectado =
             lineas.isNotEmpty ? lineas.first : 'Producto Escaneado';
@@ -114,7 +85,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     }
   }
 
-  // Función para ingresar manualmente el precio
   void _ingresarManual() {
     TextEditingController controller = TextEditingController();
 
@@ -167,7 +137,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         _total += _ultimoPrecio;
       } else {
         _total -= _ultimoPrecio;
-        if (_total < 0) _total = 0; // Evitar precios negativos
+        if (_total < 0) _total = 0;
       }
     });
   }
@@ -177,58 +147,63 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Super Compras',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+            style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
+        backgroundColor: const Color(0xFF2196F3), // Azul de la imagen
         centerTitle: true,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // TARJETA DEL TOTAL A PAGAR
+            // TARJETA DEL TOTAL A PAGAR (Verde)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.green[100],
+                color: const Color(0xFFC8E6C9),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green, width: 3),
+                border: Border.all(color: const Color(0xFF4CAF50), width: 2),
               ),
               child: Column(
                 children: [
                   const Text('TOTAL A PAGAR',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF212121))),
                   const SizedBox(height: 5),
                   Text(
                     '\$${_total.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green),
+                        color: Color(0xFF4CAF50)),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 20),
 
-            // Botón: ESCANEAR CARTEL
+            // BOTÓN PRINCIPAL: ESCANEAR CARTEL (Azul)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _procesando ? null : _escanearCartel,
                 icon:
-                    const Icon(Icons.camera_alt, size: 28, color: Colors.black),
+                    const Icon(Icons.camera_alt, size: 28, color: Colors.white),
                 label: Text(
                   _procesando ? 'PROCESANDO...' : 'ESCANEAR CARTEL',
                   style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black),
+                      color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFA2D2D2),
+                  backgroundColor: const Color(0xFF2196F3),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -237,64 +212,65 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
-            // Botón: TIPEO MANUAL
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _ingresarManual,
-                icon: const Icon(Icons.keyboard, size: 28, color: Colors.black),
-                label: const Text(
-                  'TIPEO MANUAL',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFA2D2D2),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+            // BOTÓN SECUNDARIO: TIPEAR PRECIO MANUALMENTE
+            OutlinedButton.icon(
+              onPressed: _ingresarManual,
+              icon: const Icon(Icons.keyboard,
+                  size: 24, color: Color(0xFF2196F3)),
+              label: const Text(
+                'TIPEAR PRECIO MANUALMENTE',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2196F3)),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                side: const BorderSide(color: Color(0xFF2196F3), width: 2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
 
-            // INFORMACIÓN DEL ÚLTIMO PRODUCTO DETECTADO
+            // TARJETA ÚLTIMO PRODUCTO (Gris)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: const Color(0xFFEEEEEE),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
-                  Text('Último Producto:',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[700])),
+                  const Text('Último Producto:',
+                      style: TextStyle(fontSize: 18, color: Color(0xFF616161))),
+                  const SizedBox(height: 4),
                   Text(
                     _ultimoProducto,
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF212121)),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 5),
                   Text(
                     'Precio: \$${_ultimoPrecio.toStringAsFixed(2)}',
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800),
+                        color: Color(0xFF1976D2)),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // BOTONES MAS (+) Y MENOS (-)
+            // BOTONES SUMAR (+) Y RESTAR (-)
             Row(
               children: [
                 Expanded(
@@ -302,8 +278,10 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                     onPressed:
                         _ultimoPrecio > 0 ? () => _modificarTotal(true) : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: const Color(0xFF4CAF50),
+                      disabledBackgroundColor: const Color(0xFFE0E0E0),
                       foregroundColor: Colors.white,
+                      disabledForegroundColor: const Color(0xFF9E9E9E),
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
@@ -319,8 +297,10 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                     onPressed:
                         _ultimoPrecio > 0 ? () => _modificarTotal(false) : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor: const Color(0xFFF44336),
+                      disabledBackgroundColor: const Color(0xFFE0E0E0),
                       foregroundColor: Colors.white,
+                      disabledForegroundColor: const Color(0xFF9E9E9E),
                       padding: const EdgeInsets.symmetric(vertical: 20),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
