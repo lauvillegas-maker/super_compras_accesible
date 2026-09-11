@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
-void main() {
+List<CameraDescription> cameras = [];
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    cameras = await availableCameras();
+  } catch (e) {
+    debugPrint("Error al inicializar cámaras: $e");
+  }
   runApp(const MiApp());
 }
 
@@ -37,16 +45,34 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   double _ultimoPrecio = 0.0;
   bool _procesando = false;
 
+  CameraController? _cameraController;
+
   Future<void> _escanearCartel() async {
     var status = await Permission.camera.request();
 
     if (status.isGranted) {
-      final picker = ImagePicker();
-      final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+      if (cameras.isEmpty) {
+        cameras = await availableCameras();
+      }
 
-      if (photo != null) {
+      if (cameras.isNotEmpty) {
         setState(() => _procesando = true);
 
+        // Inicializar la cámara nativa en segundo plano
+        _cameraController = CameraController(
+          cameras.first,
+          ResolutionPreset.high,
+          enableAudio: false,
+        );
+
+        await _cameraController!.initialize();
+
+        // Disparo instantáneo sin pantalla de confirmación del sistema
+        XFile photo = await _cameraController!.takePicture();
+        await _cameraController!.dispose();
+        _cameraController = null;
+
+        // Procesar imagen con ML Kit
         final inputImage = InputImage.fromFilePath(photo.path);
         final textRecognizer =
             TextRecognizer(script: TextRecognitionScript.latin);
@@ -55,15 +81,13 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
         String textoCompleto = recognizedText.text;
 
-        // Expresión regular para capturar el precio exacto con 2 decimales (soporta . y ,)
         RegExp expPrecio = RegExp(r'\$?\s?(\d+([.,]\d{1,2})?)');
         Iterable<RegExpMatch> matches = expPrecio.allMatches(textoCompleto);
 
         double precioDetectado = 0.0;
         for (var match in matches) {
           String valStr = match.group(1) ?? '0';
-          
-          // Manejo de punto y coma para no perder decimales
+
           if (valStr.contains(',') && valStr.contains('.')) {
             valStr = valStr.replaceAll('.', '').replaceAll(',', '.');
           } else if (valStr.contains(',')) {
@@ -83,8 +107,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         setState(() {
           _ultimoProducto = nombreDetectado;
           _ultimoPrecio = precioDetectado;
-          
-          // 2. SUMA AUTOMÁTICA: Se añade al total sin esperar acción del usuario
+
           if (precioDetectado > 0) {
             _total += precioDetectado;
           }
@@ -131,7 +154,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                   setState(() {
                     _ultimoProducto = 'Ingreso Manual';
                     _ultimoPrecio = precio;
-                    _total += precio; // Suma automática al tipear manualmente
+                    _total += precio;
                   });
                   Navigator.pop(context);
                 }
@@ -157,12 +180,21 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   }
 
   @override
+  void dispose() {
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Super Compras',
-            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: const Color(0xFF2196F3), // Azul original
+            style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
+        backgroundColor: const Color(0xFF2196F3),
         centerTitle: true,
         elevation: 0,
       ),
@@ -171,12 +203,13 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // BOTÓN PRINCIPAL: ESCANEAR CARTEL (Azul)
+            // BOTÓN PRINCIPAL: ESCANEAR CARTEL
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _procesando ? null : _escanearCartel,
-                icon: const Icon(Icons.camera_alt, size: 28, color: Colors.white),
+                icon:
+                    const Icon(Icons.camera_alt, size: 28, color: Colors.white),
                 label: Text(
                   _procesando ? 'PROCESANDO...' : 'ESCANEAR CARTEL',
                   style: const TextStyle(
@@ -201,7 +234,8 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: _ingresarManual,
-                icon: const Icon(Icons.keyboard, size: 28, color: Color(0xFF2196F3)),
+                icon: const Icon(Icons.keyboard,
+                    size: 28, color: Color(0xFF2196F3)),
                 label: const Text(
                   'TIPEAR PRECIO MANUALMENTE',
                   style: TextStyle(
@@ -221,7 +255,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
             const SizedBox(height: 15),
 
-            // TARJETA ÚLTIMO PRODUCTO (Gris)
+            // TARJETA ÚLTIMO PRODUCTO
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -252,7 +286,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 20),
 
             // BOTONES SUMAR (+) Y RESTAR (-)
@@ -260,7 +294,8 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _ultimoPrecio > 0 ? () => _modificarTotal(true) : null,
+                    onPressed:
+                        _ultimoPrecio > 0 ? () => _modificarTotal(true) : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4CAF50),
                       disabledBackgroundColor: const Color(0xFFE0E0E0),
@@ -278,7 +313,8 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 const SizedBox(width: 15),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _ultimoPrecio > 0 ? () => _modificarTotal(false) : null,
+                    onPressed:
+                        _ultimoPrecio > 0 ? () => _modificarTotal(false) : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF44336),
                       disabledBackgroundColor: const Color(0xFFE0E0E0),
@@ -298,7 +334,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
             const SizedBox(height: 20),
 
-            // 1. TARJETA DEL TOTAL A PAGAR (Ubicada inmediatamente debajo de Sumar/Restar)
+            // TARJETA DEL TOTAL A PAGAR
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
