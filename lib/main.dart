@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 
-List<CameraDescription> cameras = [];
-
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    cameras = await availableCameras();
-  } catch (e) {
-    debugPrint("Error al inicializar cámaras: $e");
-  }
   runApp(const MiApp());
 }
 
@@ -45,34 +38,21 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   double _ultimoPrecio = 0.0;
   bool _procesando = false;
 
-  CameraController? _cameraController;
-
   Future<void> _escanearCartel() async {
     var status = await Permission.camera.request();
 
     if (status.isGranted) {
-      if (cameras.isEmpty) {
-        cameras = await availableCameras();
-      }
+      final picker = ImagePicker();
 
-      if (cameras.isNotEmpty) {
+      // Captura directa usando la cámara
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+
+      if (photo != null) {
         setState(() => _procesando = true);
 
-        // Inicializar la cámara nativa en segundo plano
-        _cameraController = CameraController(
-          cameras.first,
-          ResolutionPreset.high,
-          enableAudio: false,
-        );
-
-        await _cameraController!.initialize();
-
-        // Disparo instantáneo sin pantalla de confirmación del sistema
-        XFile photo = await _cameraController!.takePicture();
-        await _cameraController!.dispose();
-        _cameraController = null;
-
-        // Procesar imagen con ML Kit
         final inputImage = InputImage.fromFilePath(photo.path);
         final textRecognizer =
             TextRecognizer(script: TextRecognitionScript.latin);
@@ -81,6 +61,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
         String textoCompleto = recognizedText.text;
 
+        // Expresión regular para detectar precio exacto con decimales (. y ,)
         RegExp expPrecio = RegExp(r'\$?\s?(\d+([.,]\d{1,2})?)');
         Iterable<RegExpMatch> matches = expPrecio.allMatches(textoCompleto);
 
@@ -108,6 +89,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
           _ultimoProducto = nombreDetectado;
           _ultimoPrecio = precioDetectado;
 
+          // Suma automática al detectar el precio
           if (precioDetectado > 0) {
             _total += precioDetectado;
           }
@@ -177,12 +159,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         if (_total < 0) _total = 0;
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    super.dispose();
   }
 
   @override
@@ -334,7 +310,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
             const SizedBox(height: 20),
 
-            // TARJETA DEL TOTAL A PAGAR
+            // TARJETA DEL TOTAL A PAGAR (UBICADA ABAJO DE SUMAR/RESTAR)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
