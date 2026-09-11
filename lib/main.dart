@@ -55,13 +55,21 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
         String textoCompleto = recognizedText.text;
 
-        RegExp expPrecio = RegExp(r'\$?\s?(\d+[\.,]?\d*)');
+        // Expresión regular para capturar el precio exacto con 2 decimales (soporta . y ,)
+        RegExp expPrecio = RegExp(r'\$?\s?(\d+([.,]\d{1,2})?)');
         Iterable<RegExpMatch> matches = expPrecio.allMatches(textoCompleto);
 
         double precioDetectado = 0.0;
         for (var match in matches) {
-          String valStr =
-              match.group(1)?.replaceAll('.', '').replaceAll(',', '.') ?? '0';
+          String valStr = match.group(1) ?? '0';
+          
+          // Manejo de punto y coma para no perder decimales
+          if (valStr.contains(',') && valStr.contains('.')) {
+            valStr = valStr.replaceAll('.', '').replaceAll(',', '.');
+          } else if (valStr.contains(',')) {
+            valStr = valStr.replaceAll(',', '.');
+          }
+
           double? val = double.tryParse(valStr);
           if (val != null && val > precioDetectado) {
             precioDetectado = val;
@@ -75,6 +83,11 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         setState(() {
           _ultimoProducto = nombreDetectado;
           _ultimoPrecio = precioDetectado;
+          
+          // 2. SUMA AUTOMÁTICA: Se añade al total sin esperar acción del usuario
+          if (precioDetectado > 0) {
+            _total += precioDetectado;
+          }
           _procesando = false;
         });
 
@@ -118,6 +131,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                   setState(() {
                     _ultimoProducto = 'Ingreso Manual';
                     _ultimoPrecio = precio;
+                    _total += precio; // Suma automática al tipear manualmente
                   });
                   Navigator.pop(context);
                 }
@@ -147,11 +161,8 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Super Compras',
-            style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.white)),
-        backgroundColor: const Color(0xFF2196F3), // Azul de la imagen
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+        backgroundColor: const Color(0xFF2196F3), // Azul original
         centerTitle: true,
         elevation: 0,
       ),
@@ -160,41 +171,12 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // TARJETA DEL TOTAL A PAGAR (Verde)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFC8E6C9),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF4CAF50), width: 2),
-              ),
-              child: Column(
-                children: [
-                  const Text('TOTAL A PAGAR',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF212121))),
-                  const SizedBox(height: 5),
-                  Text(
-                    '\$${_total.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF4CAF50)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
             // BOTÓN PRINCIPAL: ESCANEAR CARTEL (Azul)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _procesando ? null : _escanearCartel,
-                icon:
-                    const Icon(Icons.camera_alt, size: 28, color: Colors.white),
+                icon: const Icon(Icons.camera_alt, size: 28, color: Colors.white),
                 label: Text(
                   _procesando ? 'PROCESANDO...' : 'ESCANEAR CARTEL',
                   style: const TextStyle(
@@ -215,22 +197,24 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             const SizedBox(height: 10),
 
             // BOTÓN SECUNDARIO: TIPEAR PRECIO MANUALMENTE
-            OutlinedButton.icon(
-              onPressed: _ingresarManual,
-              icon: const Icon(Icons.keyboard,
-                  size: 24, color: Color(0xFF2196F3)),
-              label: const Text(
-                'TIPEAR PRECIO MANUALMENTE',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2196F3)),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                side: const BorderSide(color: Color(0xFF2196F3), width: 2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _ingresarManual,
+                icon: const Icon(Icons.keyboard, size: 28, color: Color(0xFF2196F3)),
+                label: const Text(
+                  'TIPEAR PRECIO MANUALMENTE',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2196F3)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: const BorderSide(color: Color(0xFF2196F3), width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
@@ -268,6 +252,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ],
               ),
             ),
+            
             const SizedBox(height: 20),
 
             // BOTONES SUMAR (+) Y RESTAR (-)
@@ -275,8 +260,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed:
-                        _ultimoPrecio > 0 ? () => _modificarTotal(true) : null,
+                    onPressed: _ultimoPrecio > 0 ? () => _modificarTotal(true) : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4CAF50),
                       disabledBackgroundColor: const Color(0xFFE0E0E0),
@@ -294,8 +278,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 const SizedBox(width: 15),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed:
-                        _ultimoPrecio > 0 ? () => _modificarTotal(false) : null,
+                    onPressed: _ultimoPrecio > 0 ? () => _modificarTotal(false) : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF44336),
                       disabledBackgroundColor: const Color(0xFFE0E0E0),
@@ -311,6 +294,35 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // 1. TARJETA DEL TOTAL A PAGAR (Ubicada inmediatamente debajo de Sumar/Restar)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC8E6C9),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF4CAF50), width: 2),
+              ),
+              child: Column(
+                children: [
+                  const Text('TOTAL A PAGAR',
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF212121))),
+                  const SizedBox(height: 5),
+                  Text(
+                    '\$${_total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4CAF50)),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
