@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:image_picker/image_picker.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MiApp());
 }
@@ -18,7 +17,7 @@ class MiApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F5F5), // Fondo gris claro
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
       ),
       home: const PaginaPrincipal(),
     );
@@ -36,71 +35,94 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   double _total = 0.0;
   String _ultimoProducto = 'Ninguno';
   double _ultimoPrecio = 0.0;
-  bool _procesando = false;
 
-  Future<void> _escanearCartel() async {
-    var status = await Permission.camera.request();
+  // Algoritmo de extracción y parseo inteligente de precios
+  double _parsearPrecioInteligente(String texto) {
+    // Normalización general: buscar patrones de precios
+    RegExp regexPrecio = RegExp(r'(\$\s*)?\d+([.,]\d+)?');
+    Iterable<RegExpMatch> matches = regexPrecio.allMatches(texto);
 
-    if (status.isGranted) {
-      final picker = ImagePicker();
+    double mejorPrecio = 0.0;
 
-      // Captura directa usando la cámara
-      final XFile? photo = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.rear,
-      );
+    for (Match match in matches) {
+      String bruto = match.group(0) ?? '';
+      bool tieneSimbolo = bruto.contains('\$');
 
-      if (photo != null) {
-        setState(() => _procesando = true);
+      String limpio = bruto.replaceAll(RegExp(r'[^\d.,]'), '').trim();
+      if (limpio.isEmpty) continue;
 
-        final inputImage = InputImage.fromFilePath(photo.path);
-        final textRecognizer =
-            TextRecognizer(script: TextRecognitionScript.latin);
-        final RecognizedText recognizedText =
-            await textRecognizer.processImage(inputImage);
-
-        String textoCompleto = recognizedText.text;
-
-        // Expresión regular para detectar precio exacto con decimales (. y ,)
-        RegExp expPrecio = RegExp(r'\$?\s?(\d+([.,]\d{1,2})?)');
-        Iterable<RegExpMatch> matches = expPrecio.allMatches(textoCompleto);
-
-        double precioDetectado = 0.0;
-        for (var match in matches) {
-          String valStr = match.group(1) ?? '0';
-
-          if (valStr.contains(',') && valStr.contains('.')) {
-            valStr = valStr.replaceAll('.', '').replaceAll(',', '.');
-          } else if (valStr.contains(',')) {
-            valStr = valStr.replaceAll(',', '.');
-          }
-
-          double? val = double.tryParse(valStr);
-          if (val != null && val > precioDetectado) {
-            precioDetectado = val;
-          }
-        }
-
-        List<String> lineas = textoCompleto.split('\n');
-        String nombreDetectado =
-            lineas.isNotEmpty ? lineas.first : 'Producto Escaneado';
-
-        setState(() {
-          _ultimoProducto = nombreDetectado;
-          _ultimoPrecio = precioDetectado;
-
-          // Suma automática al detectar el precio
-          if (precioDetectado > 0) {
-            _total += precioDetectado;
-          }
-          _procesando = false;
-        });
-
-        await textRecognizer.close();
+      // Filtrar códigos de barras (números largos sin decimales)
+      if (!limpio.contains('.') &&
+          !limpio.contains(',') &&
+          limpio.length >= 7) {
+        continue;
       }
-    } else if (status.isPermanentlyDenied) {
-      await openAppSettings();
+
+      double valor = 0.0;
+
+      // Manejo de separadores
+      if (limpio.contains('.') && limpio.contains(',')) {
+        if (limpio.lastIndexOf(',') > limpio.lastIndexOf('.')) {
+          limpio = limpio.replaceAll('.', '').replaceAll(',', '.');
+        } else {
+          limpio = limpio.replaceAll(',', '');
+        }
+      } else if (limpio.contains('.')) {
+        List<String> partes = limpio.split('.');
+        if (partes.last.length == 3) {
+          limpio = limpio.replaceAll('.', '');
+        }
+      } else if (limpio.contains(',')) {
+        List<String> partes = limpio.split(',');
+        if (partes.last.length == 3) {
+          limpio = limpio.replaceAll(',', '');
+        } else {
+          limpio = limpio.replaceAll(',', '.');
+        }
+      }
+
+      valor = double.tryParse(limpio) ?? 0.0;
+
+      // Priorizar valores que tienen símbolo $
+      if (tieneSimbolo) {
+        return valor;
+      }
+
+      if (valor > mejorPrecio) {
+        mejorPrecio = valor;
+      }
     }
+
+    return mejorPrecio;
+  }
+
+  // Escáner de cámara en vivo
+  void _abrirEscanerCamara() async {
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) return;
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PantallaEscaner(
+          camera: cameras.first,
+          onPrecioDetectado: (precio) {
+            Navigator.pop(
+                context); // Cierra la cámara automáticamente (Opción A)
+            if (precio > 0) {
+              setState(() {
+                _ultimoProducto = 'Producto Escaneado';
+                _ultimoPrecio = precio;
+                _total += precio;
+              });
+            }
+          },
+          parser: _parsearPrecioInteligente,
+        ),
+      ),
+    );
   }
 
   void _ingresarManual() {
@@ -130,9 +152,8 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             ),
             ElevatedButton(
               onPressed: () {
-                double? precio =
-                    double.tryParse(controller.text.replaceAll(',', '.'));
-                if (precio != null && precio > 0) {
+                double precio = _parsearPrecioInteligente(controller.text);
+                if (precio > 0) {
                   setState(() {
                     _ultimoProducto = 'Ingreso Manual';
                     _ultimoPrecio = precio;
@@ -161,6 +182,36 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
     });
   }
 
+  void _reiniciarTotal() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Reiniciar compra?'),
+        content: const Text('El total acumulado volverá a \$0.00.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCELAR'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD32F2F)),
+            onPressed: () {
+              setState(() {
+                _total = 0.0;
+                _ultimoProducto = 'Ninguno';
+                _ultimoPrecio = 0.0;
+              });
+              Navigator.pop(context);
+            },
+            child:
+                const Text('REINICIAR', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,16 +230,15 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // BOTÓN PRINCIPAL: ESCANEAR CARTEL
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _procesando ? null : _escanearCartel,
+                onPressed: _abrirEscanerCamara,
                 icon:
                     const Icon(Icons.camera_alt, size: 28, color: Colors.white),
-                label: Text(
-                  _procesando ? 'PROCESANDO...' : 'ESCANEAR CARTEL',
-                  style: const TextStyle(
+                label: const Text(
+                  'ESCANEAR CARTEL',
+                  style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.white),
@@ -202,10 +252,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // BOTÓN SECUNDARIO: TIPEAR PRECIO MANUALMENTE
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -228,10 +275,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ),
               ),
             ),
-
             const SizedBox(height: 15),
-
-            // TARJETA ÚLTIMO PRODUCTO
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -262,10 +306,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // BOTONES SUMAR (+) Y RESTAR (-)
             Row(
               children: [
                 Expanded(
@@ -307,10 +348,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
-            // TARJETA DEL TOTAL A PAGAR (UBICADA ABAJO DE SUMAR/RESTAR)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -336,8 +374,129 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
                 ],
               ),
             ),
+            const SizedBox(height: 15),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _reiniciarTotal,
+                icon: const Icon(Icons.refresh, size: 24, color: Colors.white),
+                label: const Text(
+                  'REINICIAR / LIMPIAR TOTAL',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF757575),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class PantallaEscaner extends StatefulWidget {
+  final CameraDescription camera;
+  final Function(double) onPrecioDetectado;
+  final double Function(String) parser;
+
+  const PantallaEscaner({
+    super.key,
+    required this.camera,
+    required this.onPrecioDetectado,
+    required this.parser,
+  });
+
+  @override
+  State<PantallaEscaner> createState() => _PantallaEscanerState();
+}
+
+class _PantallaEscanerState extends State<PantallaEscaner> {
+  late CameraController _controller;
+  final TextRecognizer _textRecognizer = TextRecognizer();
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CameraController(widget.camera, ResolutionPreset.medium,
+        enableAudio: false);
+    _controller.initialize().then((_) {
+      if (!mounted) return;
+      _controller.startImageStream(_procesarImagenCamara);
+      setState(() {});
+    });
+  }
+
+  void _procesarImagenCamara(CameraImage image) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      final InputImage inputImage = _prepararInputImage(image);
+      final RecognizedText recognizedText =
+          await _textRecognizer.processImage(inputImage);
+
+      double precio = widget.parser(recognizedText.text);
+      if (precio > 0) {
+        await _controller.stopImageStream();
+        widget.onPrecioDetectado(precio);
+      }
+    } catch (_) {
+      // Ignorar errores temporales de frames
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  InputImage _prepararInputImage(CameraImage image) {
+    return InputImage.fromBytes(
+      bytes: image.planes[0].bytes,
+      metadata: InputImageMetadata(
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.nv21,
+        bytesPerRow: image.planes[0].bytesPerRow,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _textRecognizer.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_controller.value.isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('Apunte al Cartel')),
+      body: Stack(
+        children: [
+          CameraPreview(_controller),
+          Center(
+            child: Container(
+              width: 250,
+              height: 150,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.green, width: 3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
