@@ -38,7 +38,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 
   // Algoritmo de extracción y parseo inteligente de precios
   double _parsearPrecioInteligente(String texto) {
-    // Normalización general: buscar patrones de precios
     RegExp regexPrecio = RegExp(r'(\$\s*)?\d+([.,]\d+)?');
     Iterable<RegExpMatch> matches = regexPrecio.allMatches(texto);
 
@@ -109,8 +108,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
         builder: (context) => PantallaEscaner(
           camera: cameras.first,
           onPrecioDetectado: (precio) {
-            Navigator.pop(
-                context); // Cierra la cámara automáticamente (Opción A)
+            Navigator.pop(context);
             if (precio > 0) {
               setState(() {
                 _ultimoProducto = 'Producto Escaneado';
@@ -427,8 +425,12 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
   @override
   void initState() {
     super.initState();
-    _controller = CameraController(widget.camera, ResolutionPreset.medium,
-        enableAudio: false);
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.nv21,
+    );
     _controller.initialize().then((_) {
       if (!mounted) return;
       _controller.startImageStream(_procesarImagenCamara);
@@ -441,30 +443,43 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
     _isProcessing = true;
 
     try {
-      final InputImage inputImage = _prepararInputImage(image);
-      final RecognizedText recognizedText =
-          await _textRecognizer.processImage(inputImage);
+      final InputImage? inputImage = _prepararInputImage(image);
+      if (inputImage != null) {
+        final RecognizedText recognizedText =
+            await _textRecognizer.processImage(inputImage);
 
-      double precio = widget.parser(recognizedText.text);
-      if (precio > 0) {
-        await _controller.stopImageStream();
-        widget.onPrecioDetectado(precio);
+        double precio = widget.parser(recognizedText.text);
+        if (precio > 0) {
+          await _controller.stopImageStream();
+          widget.onPrecioDetectado(precio);
+        }
       }
     } catch (_) {
-      // Ignorar errores temporales de frames
+      // Ignorar errores temporales en frames
     } finally {
       _isProcessing = false;
     }
   }
 
-  InputImage _prepararInputImage(CameraImage image) {
+  InputImage? _prepararInputImage(CameraImage image) {
+    final sensorOrientation = widget.camera.sensorOrientation;
+    InputImageRotation? rotation =
+        InputImageRotationValue.fromRawValue(sensorOrientation);
+    if (rotation == null) return null;
+
+    final format = InputImageFormatValue.fromRawValue(image.format.raw);
+    if (format == null) return null;
+
+    if (image.planes.length != 1) return null;
+    final plane = image.planes.first;
+
     return InputImage.fromBytes(
-      bytes: image.planes[0].bytes,
+      bytes: plane.bytes,
       metadata: InputImageMetadata(
         size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: InputImageRotation.rotation0deg,
-        format: InputImageFormat.nv21,
-        bytesPerRow: image.planes[0].bytesPerRow,
+        rotation: rotation,
+        format: format,
+        bytesPerRow: plane.bytesPerRow,
       ),
     );
   }
@@ -488,8 +503,8 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
           CameraPreview(_controller),
           Center(
             child: Container(
-              width: 250,
-              height: 150,
+              width: 280,
+              height: 160,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.green, width: 3),
                 borderRadius: BorderRadius.circular(12),
