@@ -36,63 +36,44 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
   String _ultimoProducto = 'Ninguno';
   double _ultimoPrecio = 0.0;
 
-  // Algoritmo de extracción y parseo inteligente de precios
-  double _parsearPrecioInteligente(String texto) {
+  // Parsea un string simple (para cuando se ingresa manualmente)
+  double _parsearPrecioTexto(String texto) {
     RegExp regexPrecio = RegExp(r'(\$\s*)?\d+([.,]\d+)?');
     Iterable<RegExpMatch> matches = regexPrecio.allMatches(texto);
 
-    double mejorPrecio = 0.0;
-
     for (Match match in matches) {
       String bruto = match.group(0) ?? '';
-      bool tieneSimbolo = bruto.contains('\$');
-
       String limpio = bruto.replaceAll(RegExp(r'[^\d.,]'), '').trim();
       if (limpio.isEmpty) continue;
 
-      // Filtrar códigos de barras (números largos sin decimales)
-      if (!limpio.contains('.') &&
-          !limpio.contains(',') &&
-          limpio.length >= 7) {
-        continue;
+      double valor = _convertirANumero(limpio);
+      if (valor > 0) return valor;
+    }
+    return 0.0;
+  }
+
+  // Convierte cadenas con formato de precio a número de tipo double
+  static double _convertirANumero(String limpio) {
+    if (limpio.contains('.') && limpio.contains(',')) {
+      if (limpio.lastIndexOf(',') > limpio.lastIndexOf('.')) {
+        limpio = limpio.replaceAll('.', '').replaceAll(',', '.');
+      } else {
+        limpio = limpio.replaceAll(',', '');
       }
-
-      double valor = 0.0;
-
-      // Manejo de separadores
-      if (limpio.contains('.') && limpio.contains(',')) {
-        if (limpio.lastIndexOf(',') > limpio.lastIndexOf('.')) {
-          limpio = limpio.replaceAll('.', '').replaceAll(',', '.');
-        } else {
-          limpio = limpio.replaceAll(',', '');
-        }
-      } else if (limpio.contains('.')) {
-        List<String> partes = limpio.split('.');
-        if (partes.last.length == 3) {
-          limpio = limpio.replaceAll('.', '');
-        }
-      } else if (limpio.contains(',')) {
-        List<String> partes = limpio.split(',');
-        if (partes.last.length == 3) {
-          limpio = limpio.replaceAll(',', '');
-        } else {
-          limpio = limpio.replaceAll(',', '.');
-        }
+    } else if (limpio.contains('.')) {
+      List<String> partes = limpio.split('.');
+      if (partes.last.length == 3) {
+        limpio = limpio.replaceAll('.', '');
       }
-
-      valor = double.tryParse(limpio) ?? 0.0;
-
-      // Priorizar valores que tienen símbolo $
-      if (tieneSimbolo) {
-        return valor;
-      }
-
-      if (valor > mejorPrecio) {
-        mejorPrecio = valor;
+    } else if (limpio.contains(',')) {
+      List<String> partes = limpio.split(',');
+      if (partes.last.length == 3) {
+        limpio = limpio.replaceAll(',', '');
+      } else {
+        limpio = limpio.replaceAll(',', '.');
       }
     }
-
-    return mejorPrecio;
+    return double.tryParse(limpio) ?? 0.0;
   }
 
   // Escáner de cámara en vivo
@@ -117,7 +98,6 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
               });
             }
           },
-          parser: _parsearPrecioInteligente,
         ),
       ),
     );
@@ -150,7 +130,7 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
             ),
             ElevatedButton(
               onPressed: () {
-                double precio = _parsearPrecioInteligente(controller.text);
+                double precio = _parsearPrecioTexto(controller.text);
                 if (precio > 0) {
                   setState(() {
                     _ultimoProducto = 'Ingreso Manual';
@@ -404,13 +384,11 @@ class _PaginaPrincipalState extends State<PaginaPrincipal> {
 class PantallaEscaner extends StatefulWidget {
   final CameraDescription camera;
   final Function(double) onPrecioDetectado;
-  final double Function(String) parser;
 
   const PantallaEscaner({
     super.key,
     required this.camera,
     required this.onPrecioDetectado,
-    required this.parser,
   });
 
   @override
@@ -448,17 +426,60 @@ class _PantallaEscanerState extends State<PantallaEscaner> {
         final RecognizedText recognizedText =
             await _textRecognizer.processImage(inputImage);
 
-        double precio = widget.parser(recognizedText.text);
+        // Busca el texto con el mayor tamaño tipográfico/área en pantalla
+        double precio = _extraerPrecioPorTamano(recognizedText);
         if (precio > 0) {
           await _controller.stopImageStream();
           widget.onPrecioDetectado(precio);
         }
       }
     } catch (_) {
-      // Ignorar errores temporales en frames
+      // Ignorar errores temporales en la lectura de frames
     } finally {
       _isProcessing = false;
     }
+  }
+
+  double _extraerPrecioPorTamano(RecognizedText recognizedText) {
+    double precioDetectado = 0.0;
+    double maxArea = 0.0;
+
+    for (TextBlock block in recognizedText.blocks) {
+      for (TextLine line in block.lines) {
+        String text = line.text;
+
+        RegExp regexPrecio = RegExp(r'(\$\s*)?\d+([.,]\d+)?');
+        Iterable<RegExpMatch> matches = regexPrecio.allMatches(text);
+
+        for (Match match in matches) {
+          String bruto = match.group(0) ?? '';
+          String limpio = bruto.replaceAll(RegExp(r'[^\d.,]'), '').trim();
+          if (limpio.isEmpty) continue;
+
+          // Ignorar secuencias largas de números que no son precios (ej. código de barras)
+          if (!limpio.contains('.') &&
+              !limpio.contains(',') &&
+              limpio.length >= 7) {
+            continue;
+          }
+
+          double valor = _PaginaPrincipalState._convertirANumero(limpio);
+          if (valor <= 0) continue;
+
+          // Calcula el área que ocupa el cuadro delimitador del texto
+          Rect boundingBox = line.boundingBox;
+          double area = boundingBox.width * boundingBox.height;
+
+          // Selecciona el valor que ocupe mayor espacio visual en pantalla
+          if (area > maxArea) {
+            maxArea = area;
+            precioDetectado = valor;
+          }
+        }
+      }
+    }
+
+    return precioDetectado;
   }
 
   InputImage? _prepararInputImage(CameraImage image) {
